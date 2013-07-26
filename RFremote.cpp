@@ -12,13 +12,46 @@
 #include "Arduino.h"
 #include "RFremote.h"
 
-volatile RFparams rfparams;
+volatile RFparams   rfparams;
+//SignalPatternParams _signalparams;
 
 void intSinal();
 
 // Method: Constructor
-// Desc: Put initial values to variables and arrays
+// Desc: Put FACTORY DEFAULT initial values to variables and arrays
 RFrecv::RFrecv()
+{
+	init();
+	
+	// Default config for PPA TOK 433Mhz remote
+	_signalparams.spaceMin = 10000;
+	_signalparams.spaceMax = 15000;
+	_signalparams.dotMin = 450;
+	_signalparams.dotMax = 550;
+	_signalparams.traceMin = 950;
+	_signalparams.traceMax = 1050;
+	_signalparams.skipFirst = 0;
+	_signalparams.skipLast = 0;
+}
+
+// Method: Constructor
+// Desc: Put CUSTOM initial values to variables and arrays
+RFrecv::RFrecv(SignalPatternParams *signalparams)
+{
+	init();
+	
+	// custom config
+	_signalparams.spaceMin = signalparams->spaceMin;
+	_signalparams.spaceMax = signalparams->spaceMax;
+	_signalparams.dotMin = signalparams->dotMin;
+	_signalparams.dotMax = signalparams->dotMax;
+	_signalparams.traceMin = signalparams->traceMin;
+	_signalparams.traceMax = signalparams->traceMax;
+	_signalparams.skipFirst = signalparams->skipFirst;
+	_signalparams.skipLast = signalparams->skipLast;
+}
+
+void RFrecv::init()
 {
 	rfparams.lock = 0;
 	rfparams.eof = 0;
@@ -48,6 +81,8 @@ void RFrecv::begin()
 	
 	// Interrupt to trigger when RF pin state change
 	attachInterrupt(INT_RF, intSinal, CHANGE);
+	
+	
 }
 
 // Method: available
@@ -90,6 +125,28 @@ unsigned char RFrecv::available()
 			{
 				// if got here, command available!
 				ret = 1;
+				
+				
+				if (DEBUG)
+				{
+					rfparams.lock = 1;	
+					unsigned long t = millis() + 200;			
+					digitalWrite(LED_DEBUG, HIGH);
+					while(t>millis());
+					t = millis() + 200;
+					digitalWrite(LED_DEBUG, LOW);
+					while(t>millis());
+					t = millis() + 200;
+					digitalWrite(LED_DEBUG, HIGH);
+					while(t>millis());
+					t = millis() + 200;
+					digitalWrite(LED_DEBUG, LOW);
+					while(t>millis());
+					t = millis() + 200;
+					rfparams.lock = 0;							
+				}		
+	
+				
 			}
 		}
 		// check if there is errors
@@ -121,9 +178,17 @@ unsigned char RFrecv::gotPattern()
 	for (int i = 0; i < BUFF_SIZE; i++)
 	{	
 		// check if pattern is found
-		if (buffDiff[i] > SIGNAL_PATTERN_MIN && buffDiff[i] < SIGNAL_PATTERN_MAX)
+		if (buffDiff[i] > _signalparams.spaceMin && buffDiff[i] < _signalparams.spaceMax)
 		{
 			foundIdx[foundCount] = i;
+			
+			/*		
+			if (foundCount == 0) 
+				foundIdx[foundCount] = i + _signalparams.skipFirst;
+			else
+				foundIdx[foundCount] = i - _signalparams.skipLast;
+			*/
+			
 			foundCount++;
 		}
 		
@@ -149,17 +214,17 @@ unsigned char RFrecv::gotData()
 	if (foundIdx[0] && foundIdx[1]) 
 	{
 		// loop through found indexes
-		for (int i = foundIdx[0] + 1; i < foundIdx[1]; i++)
+		for (int i = foundIdx[0] + 1 + _signalparams.skipFirst; i < foundIdx[1] - _signalparams.skipLast; i++)
 		{
 			// check if its a 500us timming
 			// so that case fill 1 byte into cmd array
-		  if (buffDiff[i] > SIGNAL_1BYTE_MIN && buffDiff[i] < SIGNAL_1BYTE_MAX)
+		  if (buffDiff[i] > _signalparams.dotMin && buffDiff[i] < _signalparams.dotMax)
 		  {
 		    cmd[cmdIdx] = (buffState[i] ? '1' : '0');
 		  }
 		  // check if its a 1000us timming
 			// so that case fill 2 byte into cmd array
-		  else if (buffDiff[i] > SIGNAL_2BYTE_MIN && buffDiff[i] < SIGNAL_2BYTE_MAX)
+		  else if (buffDiff[i] > _signalparams.traceMin && buffDiff[i] < _signalparams.traceMax)
 		  {
 		    cmd[cmdIdx] = (buffState[i] ? '1' : '0');
 		    cmdIdx++;
@@ -189,6 +254,8 @@ unsigned char RFrecv::gotData()
 		// means not valid pattern, abort buffer
 		isError = 1;
 	}
+	
+	
 	return !isError;
 }
 
@@ -230,7 +297,7 @@ void intSinal()
 		rfparams.tempo = micros();
 		
 		// Debug led, it blinks trhough state changes
-		if (DEBUG) digitalWrite(LED_DEBUG, rfparams.state);
+		if (DEBUG_INT) digitalWrite(LED_DEBUG, rfparams.state);
 	}
 }
 
