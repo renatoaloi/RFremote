@@ -4,6 +4,8 @@
 #define DEBUG     1
 #define BUFF_SIZE 180
 
+#define SORT_BUFFER 1
+
 volatile unsigned long tempo;
 volatile unsigned int  intervalo;
 
@@ -53,6 +55,9 @@ void loop()
   
   if (eof)
   {
+    #if SORT_BUFFER
+    sort();
+    #endif
     // Imprime resultado
     Serial.println("buff:");
     for (int i = 0; i < BUFF_SIZE / 3; i++)
@@ -109,3 +114,17 @@ void resetVars()
   }
 }
 
+#if SORT_BUFFER
+void sort() {
+  int aux, i, j;
+  for(i = BUFF_SIZE - 1; i >= 1; i--) {  
+    for(j = 0; j < i; j++) {
+      if(buff[j] > buff[j + 1]) {
+        aux = buff[j];
+        buff[j] = buff[j + 1];
+        buff[j + 1] = aux;
+      }
+    }
+  }
+}
+#endif
